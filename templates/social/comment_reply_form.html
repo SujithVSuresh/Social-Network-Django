@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container">
+    <div class="row mt-5">
+        <div class="col-md-5 col-sm-6">
+            <a href="{% url 'post-detail' comment.post.pk %}" class="btn btn-light">Back to Feed</a>
+        </div>
+    </div>
+    
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-5 col-sm-12 border-bottom">
+            <h4>{{comment_reply_count}} Reply</h4>
+            <div class="p-3" style="background-color:lavender">
+         <p>
+             <strong>{{ comment.author }}</strong> {{ comment.created_on }}
+        </p>
+         <p>{{ comment.comment }}</p>
+         </div>
+
+        </div>
+    </div>
+    
+    <div class="row justify-content-center mt-3">
+        <div class="col-md-5 col-sm-12">
+         <form method="POST" action="">
+        {% csrf_token %}
+         {{ form | crispy }}
+         <div class="d-grid gap-2">
+             <button class="btn btn-success mt-3">Submit!</button>
+         </div>
+         </form>
+
+         {% for comment in comment_reply %}
+         <div class="row justify-content-center mt-3">
+             <div class="col-md-9 col-sm-12  border-bottom">
+            <p>
+                <strong>{{ comment.author }}</strong> {{ comment.created_on }}
+                {% if request.user == comment.author %}
+                     <a href="" style="color: #333;"><i class="fas fa-trash"></i></a>
+                {% endif %}
+             </p>
+            <p>{{ comment.comment_reply }}</p>
+             
+             </div>
+         </div>   
+         {% endfor %}
+
+        </div>
+    </div>
+  
+
+</div>
+{% endblock content %}

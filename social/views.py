@@ -5,9 +5,9 @@ from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 from django.views import View
-from .models import Comment, Post, UserProfile
-from .forms import PostForm, CommentForm
-from django.views.generic.edit import UpdateView, DeleteView
+from .models import Comment, CommentReply, Notification, Post, UserProfile
+from .forms import PostForm, CommentForm, CommentReplyForm
+from django.views.generic.edit import CreateView, FormView, UpdateView, DeleteView
 
 
 # Create your views here.
@@ -45,16 +45,18 @@ class PostDetailView(LoginRequiredMixin, View):
         form = CommentForm()
 
         comments = Comment.objects.filter(post=post).order_by('-created_on') 
+  
+
 
         context = {
             'post':post,
             'form':form,
-            'comments':comments
+            'comments':comments,
         }   
 
         return render(request, 'social/post_detail.html', context)  
 
-    def post(self, request, pk, *args, **kwargs):
+    def post(self, request, pk,  *args, **kwargs):
         post = Post.objects.get(pk=pk)
         form = CommentForm(request.POST)
 
@@ -64,7 +66,9 @@ class PostDetailView(LoginRequiredMixin, View):
             new_comments.post = post
             new_comments.save()
 
-        comments = Comment.objects.filter(post=post).order_by('-created_on')    
+        comments = Comment.objects.filter(post=post).order_by('-created_on')  
+
+        Notification.objects.create(notification_type=2, from_user=request.user, to_user=post.author, post=post)
 
         context = {
             'post':post,
@@ -73,6 +77,53 @@ class PostDetailView(LoginRequiredMixin, View):
         }   
 
         return render(request, 'social/post_detail.html', context) 
+
+class CommentReplyFormView(LoginRequiredMixin, View):
+    def get(self, request, post_pk, pk, *args, **kwargs):
+        post = Post.objects.get(pk=post_pk)
+        comment = Comment.objects.get(id=pk)
+        form = CommentReplyForm()
+
+        comment_reply = CommentReply.objects.filter(comment=comment).order_by('-created_on') 
+        comment_reply_count = comment_reply.count()
+
+        context = {
+            'form':form,
+            'post_back':post,
+            'comment':comment,
+            'comment_reply':comment_reply,
+            'comment_reply_count':comment_reply_count
+         
+        }   
+
+        return render(request, 'social/comment_reply_form.html', context)  
+
+    def post(self, request, post_pk, pk, *args, **kwargs):
+        post = Post.objects.get(pk=post_pk)
+        comment = Comment.objects.get(id=pk)
+
+        form = CommentReplyForm(request.POST)
+        if form.is_valid():
+            reply_comment = form.save(commit=False)
+            reply_comment.author = request.user
+            reply_comment.post = post
+            reply_comment.comment = comment
+            reply_comment.save() 
+
+        comment_reply = CommentReply.objects.filter(comment=comment).order_by('-created_on') 
+        comment_reply_count = comment_reply.count()  
+
+        Notification.objects.create(notification_type=2, from_user=request.user, to_user=post.author, post=post, comment=comment)      
+
+        context = {
+            'form':form,
+            'comment':comment,
+            'comment_reply':comment_reply,
+            'comment_reply_count':comment_reply_count
+         
+        }    
+
+        return render(request, 'social/comment_reply_form.html', context)         
 
 
 class PostEditView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
@@ -162,6 +213,10 @@ class AddFollower(LoginRequiredMixin, View):
         profile = UserProfile.objects.get(pk=pk)
         profile.followers.add(request.user)   
 
+        notification = Notification.objects.create(notification_type=3, from_user=request.user, to_user=profile.user)
+
+        
+
         return redirect('profile', pk=profile.pk)     
 
 
@@ -195,6 +250,7 @@ class AddLike(LoginRequiredMixin, View):
 
         if not is_like:
             post.likes.add(request.user)
+            notification = Notification.objects.create(notification_type=1, from_user=request.user, to_user=post.author, post=post)
 
         if is_like:
             post.likes.remove(request.user)             
@@ -225,12 +281,74 @@ class AddDisLike(LoginRequiredMixin, View):
 
         if not is_dislike:
             post.dislike.add(request.user)
+        
 
         if is_dislike:
             post.dislike.remove(request.user)  
 
         next = request.POST.get('next', '/')
-        return HttpResponseRedirect(next)     
+        return HttpResponseRedirect(next)   
+
+class AddCommentLike(LoginRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        comment = Comment.objects.get(pk=pk)
+
+        is_dislike = False
+
+        for dislike in comment.dislike.all():
+            if dislike == request.user:
+                is_dislike = True
+                break
+
+        if is_dislike:
+            comment.dislike.remove(request.user)    
+
+        is_like = False
+
+        for like in comment.like.all():
+            if like == request.user:
+                is_like = True
+                break   
+
+        if not is_like:
+            comment.like.add(request.user)
+            notification = Notification.objects.create(notification_type=1, from_user=request.user, to_user=comment.author, comment=comment)
+
+        if is_like:
+            comment.like.remove(request.user)             
+
+        next = request.POST.get('next', '/')
+        return HttpResponseRedirect(next)
+
+class AddCommentDisLike(LoginRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        comment = Comment.objects.get(pk=pk)
+
+        is_like = False
+
+        for like in comment.like.all():
+            if like == request.user:
+                is_like = True
+                break 
+
+        if is_like:
+            comment.like.remove(request.user)    
+
+        is_dislike = False
+
+        for dislike in comment.dislike.all():
+            if dislike == request.user:
+                is_dislike = True
+                break
+
+        if not is_dislike:
+            comment.dislike.add(request.user)
+
+        if is_dislike:
+            comment.dislike.remove(request.user)  
+
+        next = request.POST.get('next', '/')
+        return HttpResponseRedirect(next)             
 
 class UserSearch(View):
     def get(self, request, *args, **kwargs):
@@ -246,7 +364,7 @@ class UserSearch(View):
         return render(request, 'social/search.html', context) 
 
 
-class ListFollowers(View):
+class ListFollowers(View, LoginRequiredMixin):
     def get(self, request, pk, *args, **kwargs):
         profile = UserProfile.objects.get(pk=pk)
         followers = profile.followers.all()
@@ -256,7 +374,26 @@ class ListFollowers(View):
             'followers':followers,
         }   
 
-        return render(request, 'social/followers_list.html', context)            
+        return render(request, 'social/followers_list.html', context)   
 
-   
+class PostNotification(View, LoginRequiredMixin):
+    def get(self, request, notification_pk, post_pk, *args, **kwargs):
+        notification = Notification.objects.get(pk=notification_pk)
+        post = Post.objects.get(pk=post_pk)
+
+        notification.user_has_seen = True
+        notification.save()
+
+        return redirect('post-detail', pk=post_pk)   
+                  
+
+class FollowNotification(View, LoginRequiredMixin):
+    def get(self, request, notification_pk, profile_pk, *args, **kwargs):
+        notification = Notification.objects.get(pk=notification_pk)
+        profile = UserProfile.objects.get(pk=profile_pk)
+
+        notification.user_has_seen = True
+        notification.save()
+
+        return redirect('profile', pk=profile_pk)      
             

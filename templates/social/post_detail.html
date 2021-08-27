@@ -61,6 +61,25 @@
            {% endif %}
         </p>
        <p>{{ comment.comment }}</p>
+       
+    <div class="d-flex flex-row">
+        <form method="POST" action="{% url 'comment-like' post.pk comment.pk %}">
+         {% csrf_token %}
+         <input type="hidden" name="next" value="{{ request.path }}">
+         <button style="background-color: transparent; border: none; box-shadow:none;" type="submit">
+             <i class="far fa-thumbs-up"><span>{{ comment.like.all.count }}</span></i>
+         </button>
+        </form>
+
+        <form method="POST" action="{% url 'comment-dislike' post.pk comment.pk %}">
+         {% csrf_token %}
+         <input type="hidden" name="next" value="{{ request.path }}">
+         <button style="background-color: transparent; border: none; box-shadow:none;" type="submit">
+             <i class="far fa-thumbs-down">{{ comment.dislike.all.count }}</i>
+         </button>
+        </form>
+        <a href="{% url 'comment-reply-form' post.pk comment.pk %}"><i class="far fa-comment">View Reply</i></a>
+    </div>
         </div>
     </div>   
     {% endfor %}
