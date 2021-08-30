@@ -1,13 +1,13 @@
 from django import forms
 from django.shortcuts import render, redirect
 from django.db.models import Q
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.http import HttpResponseRedirect
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 from django.views import View
 from .models import Comment, CommentReply, Notification, Post, UserProfile
 from .forms import PostForm, CommentForm, CommentReplyForm
-from django.views.generic.edit import CreateView, FormView, UpdateView, DeleteView
+from django.views.generic.edit import UpdateView, DeleteView
 
 
 # Create your views here.
@@ -31,6 +31,7 @@ class PostListView(LoginRequiredMixin, View):
             new_post = form.save(commit=False)
             new_post.author = request.user
             new_post.save()
+            return redirect('post-list')
         
         context = {
             'post_list':posts,
@@ -65,6 +66,7 @@ class PostDetailView(LoginRequiredMixin, View):
             new_comments.author = request.user
             new_comments.post = post
             new_comments.save()
+            return redirect('post-detail', pk=pk)
 
         comments = Comment.objects.filter(post=post).order_by('-created_on')  
 
@@ -109,6 +111,7 @@ class CommentReplyFormView(LoginRequiredMixin, View):
             reply_comment.post = post
             reply_comment.comment = comment
             reply_comment.save() 
+            
 
         comment_reply = CommentReply.objects.filter(comment=comment).order_by('-created_on') 
         comment_reply_count = comment_reply.count()  
@@ -212,8 +215,8 @@ class AddFollower(LoginRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         profile = UserProfile.objects.get(pk=pk)
         profile.followers.add(request.user)   
-
-        notification = Notification.objects.create(notification_type=3, from_user=request.user, to_user=profile.user)
+        
+        Notification.objects.create(notification_type=3, from_user=request.user, to_user=profile.user)
 
         
 
@@ -250,7 +253,7 @@ class AddLike(LoginRequiredMixin, View):
 
         if not is_like:
             post.likes.add(request.user)
-            notification = Notification.objects.create(notification_type=1, from_user=request.user, to_user=post.author, post=post)
+            Notification.objects.create(notification_type=1, from_user=request.user, to_user=post.author, post=post)
 
         if is_like:
             post.likes.remove(request.user)             
@@ -312,7 +315,7 @@ class AddCommentLike(LoginRequiredMixin, View):
 
         if not is_like:
             comment.like.add(request.user)
-            notification = Notification.objects.create(notification_type=1, from_user=request.user, to_user=comment.author, comment=comment)
+            Notification.objects.create(notification_type=1, from_user=request.user, to_user=comment.author, comment=comment)
 
         if is_like:
             comment.like.remove(request.user)             
@@ -342,7 +345,7 @@ class AddCommentDisLike(LoginRequiredMixin, View):
                 break
 
         if not is_dislike:
-            comment.dislike.add(request.user)
+            comment.dislike.add(request.user)  
 
         if is_dislike:
             comment.dislike.remove(request.user)  
@@ -383,8 +386,8 @@ class PostNotification(View, LoginRequiredMixin):
 
         notification.user_has_seen = True
         notification.save()
-
         return redirect('post-detail', pk=post_pk)   
+   
                   
 
 class FollowNotification(View, LoginRequiredMixin):
@@ -394,6 +397,5 @@ class FollowNotification(View, LoginRequiredMixin):
 
         notification.user_has_seen = True
         notification.save()
-
         return redirect('profile', pk=profile_pk)      
             
